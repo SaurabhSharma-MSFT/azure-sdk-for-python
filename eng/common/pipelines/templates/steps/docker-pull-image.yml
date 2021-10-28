@@ -6,7 +6,7 @@ parameters:
   Tag: latest
 steps:
 - pwsh: |
-    docker login $(containerRegistry) -u "${{ parameters.ContainerRegistryClientId }}" -p "${{ parameters.ContainerRegistryClientId }}"
+    docker login $(containerRegistry) -u "${{ parameters.ContainerRegistryClientId }}" -p "${{ parameters.ContainerRegistryClientSecret }}"
   displayName: Login container registry
 - pwsh: |
     $imageIdentity = '${{ parameters.ContainerRegistry }}/${{ parameters.ImageName }}:${{ parameters.Tag }}'
