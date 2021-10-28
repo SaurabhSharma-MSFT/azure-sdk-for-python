@@ -12,4 +12,4 @@ steps:
     $imageIdentity = '${{ parameters.ContainerRegistry }}/${{ parameters.ImageName }}:${{ parameters.Tag }}'
     docker pull $imageIdentity
     echo "##vso[task.setvariable variable=ImageIdentity]$imageIdentity"
-  displayName: docker pull the image
+  displayName: Pull docker image ${{ parameters.ImageName }}
