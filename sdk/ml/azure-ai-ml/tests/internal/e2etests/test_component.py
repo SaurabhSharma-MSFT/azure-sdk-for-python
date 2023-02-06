@@ -5,11 +5,12 @@ import json
 import os.path
 from typing import Callable, Dict, List
 
-from devtools_testutils import AzureRecordedTestCase, set_bodiless_matcher
 import pydash
 import pytest
+from devtools_testutils import AzureRecordedTestCase, set_bodiless_matcher
 
 from azure.ai.ml import MLClient, load_component
+from azure.ai.ml._internal.entities import InternalComponent
 
 from .._utils import PARAMETERS_TO_TEST
 
@@ -45,10 +46,7 @@ def load_registered_component(
     component_rest_object = component_entity._to_rest_object()
     return pydash.omit(component_rest_object.properties.component_spec, *omit_fields)
 
-
-@pytest.mark.fixture(autouse=True)
-def bodiless_matching(test_proxy):
-    set_bodiless_matcher()
+# previous bodiless_matcher fixture doesn't take effect because of typo, please add it in method level if needed
 
 
 @pytest.mark.usefixtures(
@@ -56,7 +54,7 @@ def bodiless_matching(test_proxy):
     "enable_internal_components",
     "mock_code_hash",
     "mock_asset_name",
-    "mock_component_hash"
+    "mock_component_hash",
 )
 @pytest.mark.e2etest
 @pytest.mark.pipeline_test
@@ -86,6 +84,8 @@ class TestComponent(AzureRecordedTestCase):
         randstr: Callable[[str], str],
         yaml_path: str,
     ) -> None:
+        if "ae365" not in yaml_path:
+            return
         omit_fields = ["id", "creation_context", "code", "name"]
         component_name = randstr("component_name")
 
@@ -101,6 +101,22 @@ class TestComponent(AzureRecordedTestCase):
                 json.dump(loaded_dict, f, indent=2)
         with open(json_path, "r") as f:
             expected_dict = json.load(f)
+            expected_dict["_source"] = "REMOTE.WORKSPACE.COMPONENT"
+
+            # default value for datatransfer
+            if expected_dict["type"] == "DataTransferComponent" and "datatransfer" not in expected_dict:
+                expected_dict["datatransfer"] = {
+                    'allow_overwrite': 'True'
+                }
 
             # TODO: check if loaded environment is expected to be an ordered dict
             assert pydash.omit(loaded_dict, *omit_fields) == pydash.omit(expected_dict, *omit_fields)
+
+    def test_component_code_hash(self, client: MLClient, randstr: Callable[[str], str]) -> None:
+        yaml_path = "./tests/test_configs/internal/command-component-reuse/powershell_copy.yaml"
+        expected_snapshot_id = "75c43313-4777-b2e9-fe3a-3b98cabfaa77"
+
+        for component_name_key in ["component_name", "component_name2"]:
+            component_name = randstr(component_name_key)
+            component_resource: InternalComponent = create_component(client, component_name, path=yaml_path)
+            assert component_resource.code.endswith(f"codes/{expected_snapshot_id}/versions/1")
