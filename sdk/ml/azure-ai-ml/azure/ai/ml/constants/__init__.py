@@ -17,9 +17,19 @@ from ._job import (
     JobType,
     NlpLearningRateScheduler,
     NlpModels,
+    TabularTrainingMode,
 )
 from ._registry import AcrAccountSku, StorageAccountType
 from ._workspace import ManagedServiceIdentityType
+from ._monitoring import (
+    MonitorSignalType,
+    MonitorMetricName,
+    MonitorModelType,
+    MonitorFeatureType,
+    MonitorDatasetContext,
+)
+
+TabularTrainingMode.__module__ = __name__
 
 __all__ = [
     "ImportSourceType",
@@ -40,4 +50,10 @@ __all__ = [
     "NlpModels",
     "NlpLearningRateScheduler",
     "Scope",
+    "TabularTrainingMode",
+    "MonitorSignalType",
+    "MonitorMetricName",
+    "MonitorModelType",
+    "MonitorFeatureType",
+    "MonitorDatasetContext",
 ]
