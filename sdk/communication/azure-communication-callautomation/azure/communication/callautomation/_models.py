@@ -8,18 +8,23 @@ from ._generated.models import (
     CallLocator,
     MediaStreamingConfiguration as MediaStreamingConfigurationRest,
     FileSource as FileSourceInternal,
-    PlaySource as PlaySourceInternal
+    TextSource as TextSourceInternal,
+    SsmlSource as SsmlSourceInternal,
+    PlaySource as PlaySourceInternal,
+    Choice as ChoiceInternal,
+    ChannelAffinity as ChannelAffinityInternal
 )
 from ._shared.models import (
     CommunicationIdentifier,
+    CommunicationUserIdentifier,
     PhoneNumberIdentifier,
 )
-from ._generated.models._enums import (
-    PlaySourceType,
-)
+from ._generated.models._enums import PlaySourceType
 from ._utils import (
     deserialize_phone_identifier,
-    deserialize_identifier
+    deserialize_identifier,
+    deserialize_comm_user_identifier,
+    serialize_identifier
 )
 if TYPE_CHECKING:
     from ._generated.models._enums  import (
@@ -27,7 +32,9 @@ if TYPE_CHECKING:
         MediaStreamingContentType,
         MediaStreamingAudioChannelType,
         CallConnectionState,
-        RecordingState
+        RecordingState,
+        Gender,
+        DtmfTone
     )
     from ._generated.models  import (
         CallParticipant as CallParticipantRest,
@@ -36,6 +43,7 @@ if TYPE_CHECKING:
         RemoveParticipantResponse as RemoveParticipantResultRest,
         TransferCallResponse as TransferParticipantResultRest,
         RecordingStateResponse as RecordingStateResultRest,
+        MuteParticipantsResponse as MuteParticipantsResultRest,
     )
 
 class CallInvite(object):
@@ -132,6 +140,41 @@ class GroupCallLocator(object):
         return CallLocator(kind=self.kind,
                            group_call_id=self.id)
 
+class ChannelAffinity(object):
+    """Channel affinity for a participant.
+
+    All required parameters must be populated in order to send to Azure.
+
+    :ivar target_participant: The identifier for the participant whose bitstream will be written to the
+     channel
+     represented by the channel number. Required.
+    :vartype target_participant: ~azure.communication.callautomation.CommunicationIdentifier
+    :ivar channel: Channel number to which bitstream from a particular participant will be written.
+    :vartype channel: int
+    """
+
+    def __init__(
+        self,
+        target_participant: CommunicationIdentifier,
+        channel: int,
+        **kwargs
+    ):
+        """
+        :keyword target_participant: The identifier for the participant whose bitstream will be written to the
+         channel
+         represented by the channel number. Required.
+        :paramtype target_participant: ~azure.communication.callautomation.CommunicationIdentifier
+        :keyword channel: Channel number to which bitstream from a particular participant will be
+         written.
+        :paramtype channel: int
+        """
+        super().__init__(**kwargs)
+        self.target_participant = target_participant
+        self.channel = channel
+
+    def _to_generated(self):
+        return ChannelAffinityInternal(participant= serialize_identifier(self.target_participant), channel=self.channel)
+
 class FileSource(object):
     """Media file source of URL to be played in action such as Play media.
 
@@ -164,6 +207,98 @@ class FileSource(object):
                 file_source=FileSourceInternal(uri=self.url),
                 play_source_id=self.play_source_id
             )
+
+class TextSource(object):
+    """TextSource to be played in actions such as Play media.
+
+    :ivar text: Text for the cognitive service to be played.
+    :vartype text: str
+    :ivar source_locale: Source language locale to be played. Refer to available locales here:
+        https://docs.microsoft.com/en-us/azure/cognitive-services/speech-service/language-support?tabs=stt-tts
+    :vartype source_locale: str
+    :ivar voice_gender: Voice gender type. Known values are: "male" and "female".
+    :vartype voice_gender: str or 'azure.communication.callautomation.Gender'
+    :ivar voice_name: Voice name to be played. Refer to available Text-to-speech voices here:
+        https://docs.microsoft.com/en-us/azure/cognitive-services/speech-service/language-support?tabs=stt-tts
+    :vartype voice_name: str
+    :ivar play_source_id: source id of the play media.
+    :vartype play_source_id: str
+    """
+    def __init__(
+            self,
+            text: str,
+            *,
+            source_locale: Optional[str] = None,
+            voice_gender: Optional[Union[str, 'Gender']] = None,
+            voice_name: Optional[str] = None,
+            play_source_id: Optional[str] = None,
+            **kwargs
+    ):
+        """TextSource to be played in actions such as Play media.
+
+        :param text: Text for the cognitive service to be played.
+        :type text: str
+        :keyword source_locale: Source language locale to be played. Refer to available locales here:
+            https://docs.microsoft.com/en-us/azure/cognitive-services/speech-service/language-support?tabs=stt-tts
+        :paramtype source_locale: str
+        :keyword voice_gender: Voice gender type. Known values are: "male" and "female".
+        :paramtype voice_gender: str or 'azure.communication.callautomation.Gender'
+        :keyword voice_name: Voice name to be played. Refer to available Text-to-speech voices here:
+            https://docs.microsoft.com/en-us/azure/cognitive-services/speech-service/language-support?tabs=stt-tts
+        :paramtype voice_name: str
+        :keyword play_source_id: source id of the play media.
+        :paramtype play_source_id: str
+        """
+        super().__init__(**kwargs)
+        self.text = text
+        self.source_locale = source_locale
+        self.voice_gender = voice_gender
+        self.voice_name = voice_name
+        self.play_source_id = play_source_id
+
+    def _to_generated(self):
+        return PlaySourceInternal(
+            source_type=PlaySourceType.TEXT,
+            text_source=TextSourceInternal(
+            text=self.text,
+            source_locale=self.source_locale,
+            voice_gender=self.voice_gender,
+            voice_name=self.voice_name),
+            play_source_id=self.play_source_id
+        )
+
+class SsmlSource(object):
+    """SsmlSource to be played in actions such as Play media.
+
+    :ivar ssml_text: Ssml string for the cognitive service to be played.
+    :vartype ssml_text: str
+    :ivar play_source_id: source id of the play media.
+    :vartype play_source_id: str
+    """
+    def __init__(
+            self,
+            ssml_text: str,
+            *,
+            play_source_id: Optional[str] = None,
+            **kwargs
+    ):
+        """SsmlSource to be played in actions such as Play media.
+
+        :param ssml_text: Ssml string for the cognitive service to be played.
+        :type ssml_text: str
+        :keyword play_source_id: source id of the play media.
+        :paramtype play_source_id: str
+        """
+        super().__init__(**kwargs)
+        self.ssml_text = ssml_text
+        self.play_source_id = play_source_id
+
+    def _to_generated(self):
+        return PlaySourceInternal(
+            source_type=PlaySourceType.SSML,
+            ssml_source=SsmlSourceInternal(ssml_text=self.ssml_text),
+            play_source_id=self.play_source_id
+        )
 
 class MediaStreamingConfiguration(object):
     """Configuration of Media streaming.
@@ -210,7 +345,7 @@ class MediaStreamingConfiguration(object):
             audio_channel_type=self.audio_channel_type
             )
 
-class CallConnectionProperties():
+class CallConnectionProperties(): # type: ignore # pylint: disable=too-many-instance-attributes
     """ Detailed properties of the call.
 
     :ivar call_connection_id: The call connection id of this call leg.
@@ -234,6 +369,10 @@ class CallConnectionProperties():
     :vartype source_display_name: str
     :ivar source_identity: Source identity of the caller.
     :vartype source_identity: ~azure.communication.callautomation.CommunicationIdentifier
+    :ivar correlation_id: Correlation ID of the call
+    :vartype correlation_id: str
+    :ivar answered_by_identifier: The identifier that answered the call
+    :vartype answered_by_identifier: ~azure.communication.callautomation.CommunicationUserIdentifier
     """
     def __init__(
         self,
@@ -248,6 +387,8 @@ class CallConnectionProperties():
         source_caller_id_number: Optional[PhoneNumberIdentifier] = None,
         source_display_name: Optional[str] = None,
         source_identity: Optional[CommunicationIdentifier] = None,
+        correlation_id: Optional[str] = None,
+        answered_by_identifier: Optional[CommunicationUserIdentifier] = None,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -260,6 +401,8 @@ class CallConnectionProperties():
         self.source_caller_id_number = source_caller_id_number
         self.source_display_name = source_display_name
         self.source_identity = source_identity
+        self.correlation_id = correlation_id
+        self.answered_by_identifier = answered_by_identifier
 
     @classmethod
     def _from_generated(cls, call_connection_properties_generated: 'CallConnectionPropertiesRest'):
@@ -281,7 +424,13 @@ class CallConnectionProperties():
             source_display_name=call_connection_properties_generated.source_display_name,
             source_identity=deserialize_identifier(call_connection_properties_generated.source_identity)
             if call_connection_properties_generated.source_identity
-            else None)
+            else None,
+            correlation_id=call_connection_properties_generated.correlation_id,
+            answered_by_identifier=deserialize_comm_user_identifier(
+                call_connection_properties_generated.answered_by_identifier)
+            if call_connection_properties_generated.answered_by_identifier
+            else None
+            )
 
 class RecordingProperties(object):
     """Detailed recording properties of the call.
@@ -395,3 +544,50 @@ class TransferCallResult(object):
     @classmethod
     def _from_generated(cls, transfer_result_generated: 'TransferParticipantResultRest'):
         return cls(operation_context=transfer_result_generated.operation_context)
+
+class Choice(object):
+    """
+    An IVR choice for the recognize operation.
+
+    :ivar label: Identifier for a given choice.
+    :vartype label: str
+    :ivar phrases: List of phrases to recognize.
+    :vartype phrases: list[str]
+    :ivar tone: Known values are: "zero", "one", "two", "three", "four", "five", "six", "seven",
+     "eight", "nine", "a", "b", "c", "d", "pound", and "asterisk".
+    :vartype tone: str or ~azure.communication.callautomation.DtmfTone
+    """
+    def __init__(
+            self,
+            label: str,
+            phrases: List[str],
+            *,
+            tone: Optional[Union[str, 'DtmfTone']] = None,
+            **kwargs
+    ):
+        super().__init__(**kwargs)
+        self.label = label
+        self.phrases = phrases
+        self.tone = tone
+
+    def _to_generated(self):
+        return ChoiceInternal(label=self.label, phrases=self.phrases, tone=self.tone)
+
+class MuteParticipantsResult(object):
+    """The response payload for muting participants from the call.
+
+    :ivar operation_context: The operation context provided by client.
+    :vartype operation_context: str
+    """
+    def __init__(
+        self,
+        *,
+        operation_context: Optional[str] = None,
+        **kwargs
+    ) -> None:
+        super().__init__(**kwargs)
+        self.operation_context = operation_context
+
+    @classmethod
+    def _from_generated(cls, mute_participants_result_generated: 'MuteParticipantsResultRest'):
+        return cls(operation_context=mute_participants_result_generated.operation_context)

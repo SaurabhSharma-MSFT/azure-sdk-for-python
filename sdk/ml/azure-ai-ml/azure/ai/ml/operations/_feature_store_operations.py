@@ -5,42 +5,38 @@
 # pylint: disable=protected-access
 
 from typing import Dict, Iterable, Optional
-
 from marshmallow import ValidationError
+
+from azure.core.credentials import TokenCredential
+from azure.core.exceptions import ResourceNotFoundError
+from azure.core.polling import LROPoller
+from azure.core.tracing.decorator import distributed_trace
 
 from azure.ai.ml._restclient.v2023_04_01_preview import AzureMachineLearningWorkspaces as ServiceClient042023Preview
 from azure.ai.ml._scope_dependent_operations import OperationsContainer, OperationScope
-
-# from azure.ai.ml._telemetry import ActivityType, monitor_with_activity
-from azure.core.credentials import TokenCredential
-from azure.core.polling import LROPoller
-from azure.core.tracing.decorator import distributed_trace
-from azure.core.exceptions import ResourceNotFoundError
+from azure.ai.ml._telemetry import ActivityType, monitor_with_activity
 from azure.ai.ml._utils._logger_utils import OpsLogger
-from azure.ai.ml.entities._feature_store.feature_store import FeatureStore
-from azure.ai.ml.entities._workspace.feature_store_settings import FeatureStoreSettings
-from azure.ai.ml.entities._feature_store.materialization_store import MaterializationStore
-from azure.ai.ml.entities import (
-    ManagedIdentityConfiguration,
-    IdentityConfiguration,
-    WorkspaceConnection,
-)
+from azure.ai.ml._utils.utils import camel_to_snake
+from azure.ai.ml.constants import ManagedServiceIdentityType
 from azure.ai.ml.constants._common import Scope
+from azure.ai.ml.entities import IdentityConfiguration, ManagedIdentityConfiguration, WorkspaceConnection
 from azure.ai.ml.entities._feature_store._constants import (
-    OFFLINE_STORE_CONNECTION_NAME,
+    FEATURE_STORE_KIND,
     OFFLINE_MATERIALIZATION_STORE_TYPE,
     OFFLINE_STORE_CONNECTION_CATEGORY,
-    ONLINE_STORE_CONNECTION_NAME,
+    OFFLINE_STORE_CONNECTION_NAME,
     ONLINE_MATERIALIZATION_STORE_TYPE,
     ONLINE_STORE_CONNECTION_CATEGORY,
-    FEATURE_STORE_KIND,
+    ONLINE_STORE_CONNECTION_NAME,
 )
-from azure.ai.ml.constants import ManagedServiceIdentityType
-from azure.ai.ml._utils.utils import camel_to_snake
+from azure.ai.ml.entities._feature_store.feature_store import FeatureStore
+from azure.ai.ml.entities._feature_store.materialization_store import MaterializationStore
+from azure.ai.ml.entities._workspace.feature_store_settings import FeatureStoreSettings
+
 from ._workspace_operations_base import WorkspaceOperationsBase
 
 ops_logger = OpsLogger(__name__)
-module_logger = ops_logger.module_logger
+logger, module_logger = ops_logger.package_logger, ops_logger.module_logger
 
 
 class FeatureStoreOperations(WorkspaceOperationsBase):
@@ -69,7 +65,9 @@ class FeatureStoreOperations(WorkspaceOperationsBase):
         )
         self._workspace_connection_operation = service_client.workspace_connections
 
-    # @monitor_with_activity(logger, "FeatureStore.List", ActivityType.PUBLICAPI)
+    @distributed_trace
+    @monitor_with_activity(logger, "FeatureStore.List", ActivityType.PUBLICAPI)
+    # pylint: disable=unused-argument
     def list(self, *, scope: str = Scope.RESOURCE_GROUP, **kwargs: Dict) -> Iterable[FeatureStore]:
         """List all feature stores that the user has access to in the current
         resource group or subscription.
@@ -82,7 +80,6 @@ class FeatureStoreOperations(WorkspaceOperationsBase):
 
         if scope == Scope.SUBSCRIPTION:
             return self._operation.list_by_subscription(
-                **kwargs,
                 cls=lambda objs: [
                     FeatureStore._from_rest_object(filterObj)
                     for filterObj in filter(lambda ws: ws.kind.lower() == FEATURE_STORE_KIND, objs)
@@ -90,15 +87,14 @@ class FeatureStoreOperations(WorkspaceOperationsBase):
             )
         return self._operation.list_by_resource_group(
             self._resource_group_name,
-            **kwargs,
             cls=lambda objs: [
                 FeatureStore._from_rest_object(filterObj)
                 for filterObj in filter(lambda ws: ws.kind.lower() == FEATURE_STORE_KIND, objs)
             ],
         )
 
-    # @monitor_with_activity(logger, "FeatureStore.Get", ActivityType.PUBLICAPI)
     @distributed_trace
+    @monitor_with_activity(logger, "FeatureStore.Get", ActivityType.PUBLICAPI)
     # pylint: disable=arguments-renamed
     def get(self, name: str, **kwargs: Dict) -> FeatureStore:
         """Get a feature store by name.
@@ -111,7 +107,7 @@ class FeatureStoreOperations(WorkspaceOperationsBase):
 
         feature_store = None
         resource_group = kwargs.get("resource_group") or self._resource_group_name
-        rest_workspace_obj = self._operation.get(resource_group, name, **kwargs)
+        rest_workspace_obj = self._operation.get(resource_group, name)
         if rest_workspace_obj and rest_workspace_obj.kind and rest_workspace_obj.kind.lower() == FEATURE_STORE_KIND:
             feature_store = FeatureStore._from_rest_object(rest_workspace_obj)
 
@@ -171,8 +167,8 @@ class FeatureStoreOperations(WorkspaceOperationsBase):
 
         return feature_store
 
-    # @monitor_with_activity(logger, "FeatureStore.BeginCreate", ActivityType.PUBLICAPI)
     @distributed_trace
+    @monitor_with_activity(logger, "FeatureStore.BeginCreate", ActivityType.PUBLICAPI)
     # pylint: disable=arguments-differ
     def begin_create(
         self,
@@ -191,6 +187,16 @@ class FeatureStoreOperations(WorkspaceOperationsBase):
         :return: An instance of LROPoller that returns a FeatureStore.
         :rtype: ~azure.core.polling.LROPoller[~azure.ai.ml.entities.FeatureStore]
         """
+        resource_group = kwargs.get("resource_group", self._resource_group_name)
+        try:
+            rest_workspace_obj = self._operation.get(resource_group, feature_store.name)
+            if rest_workspace_obj:
+                return self.begin_update(
+                    feature_store=feature_store, update_dependent_resources=update_dependent_resources, kwargs=kwargs
+                )
+        except Exception:  # pylint: disable=broad-except
+            pass
+
         if feature_store.offline_store and feature_store.offline_store.type != OFFLINE_MATERIALIZATION_STORE_TYPE:
             raise ValidationError("offline store type should be azure_data_lake_gen2")
         if feature_store.offline_store and not feature_store.materialization_identity:
@@ -214,8 +220,8 @@ class FeatureStoreOperations(WorkspaceOperationsBase):
             **kwargs,
         )
 
-    # @monitor_with_activity(logger, "FeatureStore.BeginUpdate", ActivityType.PUBLICAPI)
     @distributed_trace
+    @monitor_with_activity(logger, "FeatureStore.BeginUpdate", ActivityType.PUBLICAPI)
     # pylint: disable=arguments-renamed
     def begin_update(
         self,
@@ -240,7 +246,7 @@ class FeatureStoreOperations(WorkspaceOperationsBase):
         :return: An instance of LROPoller that returns a FeatureStore.
         :rtype: ~azure.core.polling.LROPoller[~azure.ai.ml.entities.FeatureStore]
         """
-        resource_group = kwargs.get("resource_group") or self._resource_group_name
+        resource_group = kwargs.get("resource_group", self._resource_group_name)
         rest_workspace_obj = self._operation.get(resource_group, feature_store.name)
         if not (
             rest_workspace_obj and rest_workspace_obj.kind and rest_workspace_obj.kind.lower() == FEATURE_STORE_KIND
@@ -250,7 +256,18 @@ class FeatureStoreOperations(WorkspaceOperationsBase):
         resource_group = kwargs.get("resource_group") or self._resource_group_name
         offline_store = kwargs.get("offline_store", feature_store.offline_store)
         online_store = kwargs.get("online_store", feature_store.online_store)
-        materialization_identity = kwargs.get("materialization_identity", feature_store.materialization_identity)
+        existing_materialization_identity = None
+        if rest_workspace_obj.identity:
+            identity = IdentityConfiguration._from_workspace_rest_object(rest_workspace_obj.identity)
+            if (
+                identity
+                and identity.user_assigned_identities
+                and isinstance(identity.user_assigned_identities[0], ManagedIdentityConfiguration)
+            ):
+                existing_materialization_identity = identity.user_assigned_identities[0]
+        materialization_identity = kwargs.get(
+            "materialization_identity", feature_store.materialization_identity or existing_materialization_identity
+        )
 
         if offline_store and offline_store.type != OFFLINE_MATERIALIZATION_STORE_TYPE:
             raise ValidationError("offline store type should be azure_data_lake_gen2")
@@ -272,9 +289,8 @@ class FeatureStoreOperations(WorkspaceOperationsBase):
                         "any data that was materialized "
                         "earlier will not be available. You have to run backfill again."
                     )
-            else:
-                if not materialization_identity:
-                    raise ValidationError("Materialization identity is required to setup offline store connection")
+            elif not materialization_identity:
+                raise ValidationError("Materialization identity is required to setup offline store connection")
 
         if online_store and online_store.type != ONLINE_MATERIALIZATION_STORE_TYPE:
             raise ValidationError("online store type should be redis")
@@ -296,9 +312,8 @@ class FeatureStoreOperations(WorkspaceOperationsBase):
                         "any data that was materialized earlier "
                         "will not be available. You have to run backfill again."
                     )
-            else:
-                if not materialization_identity:
-                    raise ValidationError("Materialization identity is required to setup online store connection")
+            elif not materialization_identity:
+                raise ValidationError("Materialization identity is required to setup online store connection")
 
         feature_store_settings = FeatureStoreSettings._from_rest_object(rest_workspace_obj.feature_store_settings)
 
@@ -364,9 +379,9 @@ class FeatureStoreOperations(WorkspaceOperationsBase):
             **kwargs,
         )
 
-    # @monitor_with_activity(logger, "FeatureStore.BeginDelete", ActivityType.PUBLICAPI)
     @distributed_trace
-    def begin_delete(self, name: str, *, delete_dependent_resources: bool, **kwargs: Dict) -> LROPoller[None]:
+    @monitor_with_activity(logger, "FeatureStore.BeginDelete", ActivityType.PUBLICAPI)
+    def begin_delete(self, name: str, *, delete_dependent_resources: bool = False, **kwargs: Dict) -> LROPoller[None]:
         """Delete a FeatureStore.
 
         :param name: Name of the FeatureStore

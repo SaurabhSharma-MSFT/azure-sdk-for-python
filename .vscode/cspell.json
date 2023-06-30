@@ -244,6 +244,8 @@
     "livekvtestgetkeyperfkey",
     "livekvtestsignperfkey",
     "livekvtestunwrapperfkey",
+    "lrobasepollingasynclrobasepolling",
+    "lropollerasynclropoller",
     "lmazuel",
     "logz",
     "LPCWSTR",
@@ -264,6 +266,7 @@
     "mydirectory",
     "myfile",
     "myvault",
+    "mytable",
     "nazsdk",
     "nbytes",
     "nbsp",
@@ -414,6 +417,12 @@
       "filename": "doc/dev/test_proxy_migration_guide.md",
       "words": [
         "pytestmarkparametrize"
+      ]
+    },
+    {
+      "filename": "doc/dev/pylint_checking.md",
+      "words": [
+        "pylintrc"
       ]
     },
     {
@@ -928,7 +937,9 @@
         "thead",
         "tbody",
         "racwdlmeop",
-        "newfs"
+        "newfs",
+        "adlsstorage",
+        "adlskey"
       ]
     },
     {
@@ -1471,6 +1482,22 @@
       "filename": "sdk/webpubsub/azure-messaging-webpubsubclient/azure/messaging/webpubsubclient/_client.py",
       "words": [
         "awps"
+      ]
+    },
+    {
+      "filename": "sdk/contentsafety/azure-ai-contentsafety/azure/ai/contentsafety/*.py",
+      "words": [
+        "mros",
+        "deserializers",
+        "ctxt",
+        "wday"
+      ]
+    },
+    {
+      "filename": "sdk/iothub/azure-iot-deviceprovisioning/azure/iot/deviceprovisioning/_serialization.py",
+      "words": [
+        "ctxt",
+        "wday"
       ]
     }
   ],

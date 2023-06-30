@@ -113,6 +113,7 @@ class FileSystemClient(AsyncStorageAccountHostsMixin, FileSystemClientBase):
 
     async def __aexit__(self, *args):
         await self._container_client.close()
+        await self._datalake_client_for_blob_operation.close()
         await super(FileSystemClient, self).__aexit__(*args)
 
     async def close(self):
@@ -120,7 +121,6 @@ class FileSystemClient(AsyncStorageAccountHostsMixin, FileSystemClientBase):
         """ This method is to close the sockets opened by the client.
         It need not be used when using with a context manager.
         """
-        await self._container_client.close()
         await self.__aexit__()
 
     @distributed_trace_async
@@ -270,7 +270,7 @@ class FileSystemClient(AsyncStorageAccountHostsMixin, FileSystemClientBase):
         """
         await self._container_client._rename_container(new_name, **kwargs)   # pylint: disable=protected-access
         renamed_file_system = FileSystemClient(
-                "{}://{}".format(self.scheme, self.primary_hostname), file_system_name=new_name,
+                f"{self.scheme}://{self.primary_hostname}", file_system_name=new_name,
                 credential=self._raw_credential, api_version=self.api_version, _configuration=self._config,
                 _pipeline=self._pipeline, _location_mode=self._location_mode, _hosts=self._hosts)
         return renamed_file_system
