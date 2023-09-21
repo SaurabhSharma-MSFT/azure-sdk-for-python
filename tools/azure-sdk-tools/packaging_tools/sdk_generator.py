@@ -7,7 +7,13 @@ from subprocess import check_call, getoutput
 import shutil
 import re
 import os
-import pytoml as toml
+try:
+    # py 311 adds this library natively
+    import tomllib as toml
+except:
+    # otherwise fall back to pypi package tomli
+    import tomli as toml
+import tomli_w as tomlw
 
 from .swaggertosdk.SwaggerToSdkCore import (
     CONFIG_FILE,
@@ -40,7 +46,7 @@ def extract_sdk_folder(python_md: List[str]) -> str:
     pattern = ["$(python-sdks-folder)", "azure-mgmt-"]
     for line in python_md:
         if all(p in line for p in pattern):
-            return re.findall("[a-z]+/[a-z]+-[a-z]+-[a-z]+", line)[0]
+            return re.findall("[a-z]+/[a-z]+-[a-z]+-[a-z]+[-a-z]*", line)[0]
     return ""
 
 
@@ -71,7 +77,7 @@ def after_multiapi_combiner(sdk_code_path: str, package_name: str, folder_name: 
             content["packaging"]["exclude_folders"] = ",".join([exclude(f"{package_name}-{s}") for s in subfolders_name])
 
         with open(toml_file, "w") as file_out:
-            toml.dump(content, file_out)
+            tomlw.dump(content, file_out)
         call_build_config(package_name, folder_name)
         
         # remove .egg-info to reinstall package
@@ -335,6 +341,9 @@ def main(generate_input, generate_output):
             if package_name in ("azure-mgmt-network"):
                 multiapi_combiner(sdk_code_path, package_name)
                 after_multiapi_combiner(sdk_code_path, package_name, folder_name)
+                result[package_name]["afterMultiapiCombiner"] = True
+            else:
+                result[package_name]["afterMultiapiCombiner"] = False
 
     # remove duplicates
     for value in result.values():
